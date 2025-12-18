@@ -1,0 +1,26 @@
+name: Daily Notion Summary
+
+on:
+  schedule:
+    - cron: '0 17 * * *'  # UTC 17:00 = 北京时间次日 1:00（总结前一天）
+  workflow_dispatch:       # 支持手动触发
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          pip install notion-client openai
+      - name: Run daily summarizer
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          IDEA_DB_ID: ${{ secrets.IDEA_DB_ID }}
+          DIARY_PAGE_ID: ${{ secrets.DIARY_PAGE_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python daily_summarize.py
