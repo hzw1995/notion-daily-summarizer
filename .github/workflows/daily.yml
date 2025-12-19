@@ -8,7 +8,7 @@ on:
       branch:
         description: '指定要运行的分支'
         required: false
-        default: 'master'  # 默认分支改为master
+        default: 'main'  # 默认分支改为main
 
 jobs:
   summarize:
@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.branch || 'master' }}  # 默认分支改为master
+          ref: ${{ github.event.inputs.branch || 'main' }}  # 默认分支改为main
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
