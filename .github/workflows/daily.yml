@@ -4,12 +4,19 @@ on:
   schedule:
     - cron: '0 17 * * *'  # UTC 17:00 = 北京时间次日 1:00（总结前一天）
   workflow_dispatch:       # 支持手动触发
+    inputs:
+      branch:
+        description: '指定要运行的分支'
+        required: false
+        default: 'master'  # 默认分支改为master
 
 jobs:
   summarize:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || 'master' }}  # 默认分支改为master
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
@@ -27,4 +34,4 @@ jobs:
           IDEA_DB_ID: ${{ secrets.IDEA_DB_ID }}
           DIARY_PARENT_PAGE_ID: ${{ secrets.DIARY_PARENT_PAGE_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python daily_summarize.py
+        run: python daily_summary_main.py
