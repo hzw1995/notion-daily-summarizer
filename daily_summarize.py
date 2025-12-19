@@ -4,22 +4,29 @@ from datetime import datetime, timedelta, timezone
 from notion_client import Client
 from openai import OpenAI
 
-# 初始化客户端
-notion = Client(auth=os.getenv("NOTION_TOKEN"))
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# 获取环境变量（自动去除连字符）
+# === 配置 ===
+NOTION_TOKEN = os.getenv("NOTION_TOKEN")
 IDEA_DB_ID = os.getenv("IDEA_DB_ID", "").replace("-", "")
 DIARY_PARENT_PAGE_ID = os.getenv("DIARY_PARENT_PAGE_ID", "").replace("-", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# 计算“昨天”（按北京时间 UTC+8）
+if not NOTION_TOKEN:
+    raise ValueError("❌ 环境变量 NOTION_TOKEN 未设置")
+if not OPENAI_API_KEY:
+    raise ValueError("❌ 环境变量 OPENAI_API_KEY 未设置")
+
+# 初始化客户端
+notion = Client(auth=NOTION_TOKEN)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# === 计算昨天（北京时间 UTC+8）===
 beijing_tz = timezone(timedelta(hours=8))
-today_beijing = datetime.now(beijing_tz).date()
-yesterday = today_beijing - timedelta(days=1)
+today = datetime.now(beijing_tz).date()
+yesterday = today - timedelta(days=1)
 
 print(f"🔍 正在汇总 {yesterday} 的想法...")
 
-# 查询昨天的所有想法（基于 Created time）
+# === 查询昨天的所有想法 ===
 try:
     response = notion.databases.query(
         database_id=IDEA_DB_ID,
@@ -27,7 +34,7 @@ try:
             "timestamp": "created_time",
             "created_time": {
                 "on_or_after": yesterday.isoformat(),
-                "before": today_beijing.isoformat()
+                "before": today.isoformat()
             }
         }
     )
@@ -40,14 +47,14 @@ if not ideas:
     print("😴 昨天没有新想法，跳过总结。")
     exit(0)
 
-# 提取“内容”字段文本
+# === 提取“内容”字段 ===
 idea_texts = []
 for idea in ideas:
     content_prop = idea["properties"].get("内容")  # ← 字段名必须匹配！
     if content_prop and content_prop["type"] == "rich_text":
-        texts = [t["plain_text"] for t in content_prop["rich_text"] if t.get("plain_text")]
-        if texts:
-            idea_texts.append("\n".join(texts))
+        plain_texts = [t["plain_text"] for t in content_prop["rich_text"] if t.get("plain_text")]
+        if plain_texts:
+            idea_texts.append("\n".join(plain_texts))
 
 if not idea_texts:
     print("⚠️ 找到记录但无有效内容，跳过。")
@@ -56,9 +63,9 @@ if not idea_texts:
 full_text = "\n---\n".join(idea_texts)
 print(f"✅ 找到 {len(idea_texts)} 条想法，调用 AI 总结...")
 
-# 调用 OpenAI 总结
+# === 调用 OpenAI ===
 try:
-    ai_response = openai_client.chat.completions.create(
+    ai_resp = openai_client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "你是一个高效的知识整理助手，请将以下碎片想法归纳成一段结构清晰、有逻辑的每日总结，突出关键洞察和行动项。"},
@@ -67,12 +74,12 @@ try:
         temperature=0.7,
         timeout=30
     )
-    summary = ai_response.choices[0].message.content.strip()
+    summary = ai_resp.choices[0].message.content.strip()
 except Exception as e:
     print(f"❌ AI 调用失败: {e}")
-    summary = "⚠️ AI 总结失败，请检查网络或 API Key。"
+    summary = "⚠️ AI 总结失败，请检查 API Key 或网络。"
 
-# 创建日记页面
+# === 写入 Notion 日记 ===
 try:
     new_page = notion.pages.create(
         parent={"page_id": DIARY_PARENT_PAGE_ID},
@@ -80,22 +87,14 @@ try:
             "title": [{"text": {"content": f"{yesterday} 日记"}}]
         },
         children=[
-            {
-                "heading_2": {"rich_text": [{"text": {"content": "🤖 AI 每日总结"}}]}
-            },
-            {
-                "paragraph": {"rich_text": [{"text": {"content": summary}}]}
-            },
-            {
-                "divider": {}
-            },
-            {
-                "heading_2": {"rich_text": [{"text": {"content": f"📝 原始想法（共 {len(idea_texts)} 条）"}}]}
-            }
+            {"heading_2": {"rich_text": [{"text": {"content": "🤖 AI 每日总结"}}]}},
+            {"paragraph": {"rich_text": [{"text": {"content": summary}}]}},
+            {"divider": {}},
+            {"heading_2": {"rich_text": [{"text": {"content": f"📝 原始想法（共 {len(idea_texts)} 条）"}}]}}
         ] + [
             {
                 "bulleted_list_item": {
-                    "rich_text": [{"text": {"content": text[:300]}}]  # 截断防超长
+                    "rich_text": [{"text": {"content": text[:300]}}]
                 }
             } for text in idea_texts
         ]
