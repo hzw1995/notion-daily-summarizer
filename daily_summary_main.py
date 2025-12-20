@@ -1,5 +1,6 @@
 import os
 import sys
+import importlib.util
 
 # 添加当前目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -8,6 +9,68 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import idea_retriever
 import summary_generator
 import page_writer
+
+def load_module(module_name, filename):
+    base = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(base, filename)
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    mod = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(mod)
+    except Exception as e:
+        print(f"加载模块失败 {filename}: {e}")
+        return None
+    return mod
+
+def run_news_aggregator():
+    os.environ["AGGREGATOR_MODE"] = "1"
+    flash_news = load_module("flash_news", "快讯聚合LLM分析.py")
+    mkt_news = load_module("mkt_news", "MKT新闻LLM分析.py")
+    ids = {
+        "flash": os.environ.get("FLASH_DIARY_PAGE_ID") or "2cf6a27aa8ba8092a693d81bcaa16977",
+        "mkt": os.environ.get("MKT_DIARY_PAGE_ID") or "2cf6a27aa8ba80c3a53ad48e584a484e",
+    }
+    try:
+        if flash_news is None:
+            raise RuntimeError("快讯模块不可用")
+        flash_news.main()
+        content = getattr(flash_news, "report", None)
+        if not content:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            content = f"{today} 快讯分析暂无可写入内容"
+        flash_news.write_to_notion(content, ids["flash"]) 
+    except Exception as e:
+        print(f"快讯分析执行失败: {e}")
+        try:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            fallback = f"{today} 快讯分析暂无可写入内容"
+            if flash_news is not None:
+                flash_news.write_to_notion(fallback, ids["flash"]) 
+        except Exception:
+            pass
+
+    try:
+        if mkt_news is None:
+            raise RuntimeError("MKT新闻模块不可用")
+        mkt_news.main()
+        content = getattr(mkt_news, "mkt_analysis", None)
+        if not content:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            content = f"{today} MKT新闻分析暂无可写入内容"
+        mkt_news.write_to_notion(content, ids["mkt"]) 
+    except Exception as e:
+        print(f"MKT新闻分析执行失败: {e}")
+        try:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            fallback = f"{today} MKT新闻分析暂无可写入内容"
+            if mkt_news is not None:
+                mkt_news.write_to_notion(fallback, ids["mkt"]) 
+        except Exception:
+            pass
 
 
 class DailySummaryRunner:
@@ -56,7 +119,12 @@ class DailySummaryRunner:
             ideas = idea_retriever.query_idea_database()
             
             if not ideas:
-                print("😴 过去30天没有想法记录，跳过总结。")
+                print("😴 过去30天没有想法记录，将仍然写入每日总结。")
+                from datetime import datetime
+                today = datetime.now().strftime("%Y-%m-%d")
+                fallback = f"今日未检索到未开始的看板项。\n日期：{today}\n提示：如需生成内容，请在看板中保留‘未开始’或‘进行中’的条目。"
+                page_id = page_writer.create_daily_summary(fallback)
+                print(f"\n🎉 每日总结生成完成！页面ID: {page_id}")
                 return
             
             print(f"✅ 成功获取 {len(ideas)} 个想法记录")
@@ -103,14 +171,22 @@ class DailySummaryRunner:
                 print("🔄 正在整合新旧数据...")
                 full_text = f"# 现有总结\n{existing_content}\n\n# 新获取的想法\n{full_text}"
             
-            # 调用AI生成新总结
-            summary = summary_generator.call_qwen_api(full_text)
+            summary = ""
+            try:
+                summary = summary_generator.call_qwen_api(full_text).strip()
+            except Exception:
+                summary = ""
+            if not summary:
+                summary = summary_generator.generate_summary(ideas, idea_retriever)
             
             # 5. 创建或更新每日总结页面
             print("\n📝 正在创建或更新每日总结页面...")
             page_id = page_writer.create_daily_summary(summary, existing_content)
             
             print(f"\n🎉 每日总结生成完成！页面ID: {page_id}")
+            print("\n✅ 正在更新看板状态为完成...")
+            updated = idea_retriever.update_ideas_status_to_done(ideas, idea_retriever.IDEA_DB_ID)
+            print(f"已更新 {updated} 条")
             
         except Exception as e:
             print(f"\n❌ 执行失败: {str(e)}")
@@ -119,6 +195,19 @@ class DailySummaryRunner:
 
 
 if __name__ == "__main__":
-    # 创建执行器并运行
-    runner = DailySummaryRunner()
-    runner.run()
+    sign = (os.environ.get("SIGN") or "0").strip()
+    if sign == "1":
+        runner = DailySummaryRunner()
+        runner.run()
+    elif sign == "2":
+        try:
+            run_news_aggregator()
+        except Exception as e:
+            print(f"新闻聚合执行失败: {e}")
+    else:
+        try:
+            run_news_aggregator()
+        except Exception as e:
+            print(f"新闻聚合执行失败: {e}")
+        runner = DailySummaryRunner()
+        runner.run()
