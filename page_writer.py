@@ -4,7 +4,7 @@ from notion_client import Client
 
 # 从环境变量获取配置
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-DIARY_PAGE_ID = os.environ.get("DIARY_PAGE_ID")
+DIARY_PARENT_PAGE_ID = os.environ.get("DIARY_PARENT_PAGE_ID")
 
 # 初始化Notion客户端
 notion = Client(auth=NOTION_TOKEN)
@@ -184,7 +184,7 @@ def create_daily_summary(summary, existing_ideas_content=None, parent_page_id=No
     
     try:
         # 首先查找是否已存在相同标题的页面
-        existing_page = find_page_by_title(parent_page_id or DIARY_PAGE_ID, title)
+        existing_page = find_page_by_title(parent_page_id or DIARY_PARENT_PAGE_ID, title)
         
         if existing_page:
             # 页面已存在，执行更新逻辑
@@ -250,7 +250,7 @@ def create_daily_summary(summary, existing_ideas_content=None, parent_page_id=No
                 _append_text_block(children_all, t, content)
             initial = children_all[:90]
             page = notion.pages.create(
-                parent={"page_id": parent_page_id or DIARY_PAGE_ID},
+                parent={"page_id": parent_page_id or DIARY_PARENT_PAGE_ID},
                 properties={
                     "title": [{"text": {"content": title}}]
                 },
@@ -275,7 +275,7 @@ def test_notion_connection():
     """
     try:
         # 先尝试获取页面信息，测试连接
-        test_page = notion.pages.retrieve(page_id=DIARY_PAGE_ID)
+        test_page = notion.pages.retrieve(page_id=DIARY_PARENT_PAGE_ID)
         
         # 安全获取页面标题
         page_title = "无标题"
