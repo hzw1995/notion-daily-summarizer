@@ -18,9 +18,10 @@
 
 ## 执行模式
 - 通过环境变量 `SIGN` 控制：
-  - `SIGN=1`：仅每日总结（`daily_summary_main.py:197–213`）
-  - `SIGN=2`：仅新闻聚合（快讯 + MKT）（`daily_summary_main.py:197–213`）
-  - `SIGN=0` 或未设置：同时执行（`daily_summary_main.py:197–213`）
+  - `SIGN=1`：仅每日总结（`daily_summary_main.py:248–268`）
+  - `SIGN=2`：仅快讯聚合（`daily_summary_main.py:76–100, 252–256`）
+  - `SIGN=3`：仅 MKT 聚合（`daily_summary_main.py:101–124, 257–261`）
+  - `SIGN=0` 或未设置：快讯 + MKT + 每日总结（`daily_summary_main.py:25–73, 262–268`）
 
 ## 配置变量
 - 必需（Secrets 或本地环境）：
@@ -33,6 +34,7 @@
   - `MKT_DIARY_PAGE_ID`：MKT 分析父页面 ID
 - 模型选择：
   - `QWEN_MODEL`：默认 `qwen-turbo`；可通过 Secrets 动态切换为 `qwen-plus` 等（`summary_generator.py:8`）
+  - `QWEN_MKT_TRANSLATION_MODEL`：仅用于 MKT 翻译 fallback，默认 `qwen-plus`（`MKT新闻LLM分析.py:28, 352–369`）
 - 模块内部行为开关：
   - `AGGREGATOR_MODE`：由入口脚本设置为 `"1"`，用于防止模块在入口运行时重复写入，统一由入口写入（`daily_summary_main.py:25–32`）。
 
@@ -41,7 +43,7 @@
 - 依赖安装：`notion-client openai requests pandas`（`daily.yml:27–29`）
 - 环境变量映射（Secrets）：
   - `NOTION_TOKEN`、`IDEA_DB_ID`、`DIARY_PARENT_PAGE_ID`、`OPENAI_API_KEY`
-  - `FLASH_DIARY_PAGE_ID`、`MKT_DIARY_PAGE_ID`、`QWEN_MODEL`、`SIGN`（`daily.yml:31–40`）
+  - `FLASH_DIARY_PAGE_ID`、`MKT_DIARY_PAGE_ID`、`QWEN_MODEL`、`QWEN_MKT_TRANSLATION_MODEL`、`SIGN`（`daily.yml:31–41`）
 - 触发方式：
   - 定时 `cron`：每天 UTC 17:00（北京时间次日 1:00）（`daily.yml:5`）
   - 手动触发：`workflow_dispatch` 支持选择分支（`daily.yml:6–11`）
@@ -49,8 +51,10 @@
 ## 本地运行示例（Windows）
 - 仅每日总结：
   - `set SIGN=1 && python daily_summary_main.py`
-- 仅新闻聚合：
+- 仅快讯聚合：
   - `set SIGN=2 && python daily_summary_main.py`
+- 仅 MKT 聚合：
+  - `set SIGN=3 && python daily_summary_main.py`
 - 全部执行：
   - `set SIGN=0 && python daily_summary_main.py`
 - 必需环境变量：
@@ -59,6 +63,7 @@
 
 ## Notion 页面与权限
 - 请将 Notion 集成共享到目标父页面与数据库，否则会报 404 或无法写入。
+- 父页面 ID 必须是页面 ID（非数据库 ID），写入通过 `child_page` 创建子页并追加内容（`page_writer.py:252–265`）。
 - 每日总结与新闻页面标题：
   - 每日总结：`每日总结 - YYYY-MM-DD`
   - 快讯分析：`快讯分析 - YYYY-MM-DD`
