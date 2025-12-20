@@ -26,12 +26,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install notion-client openai
+          pip install notion-client openai requests pandas
 
       - name: Run Daily Summarizer
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           IDEA_DB_ID: ${{ secrets.IDEA_DB_ID }}
-          DIARY_PARENT_PAGE_ID: ${{ secrets.DIARY_PARENT_PAGE_ID }}
+          DIARY_PAGE_ID: ${{ secrets.DIARY_PARENT_PAGE_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FLASH_DIARY_PAGE_ID: ${{ secrets.FLASH_DIARY_PAGE_ID }}
+          MKT_DIARY_PAGE_ID: ${{ secrets.MKT_DIARY_PAGE_ID }}
+          QWEN_MODEL: ${{ secrets.QWEN_MODEL }}
+          SIGN: ${{ secrets.SIGN }}
         run: python daily_summary_main.py
