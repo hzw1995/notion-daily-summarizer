@@ -27,8 +27,8 @@ def run_news_aggregator():
     flash_news = load_module("flash_news", "快讯聚合LLM分析.py")
     mkt_news = load_module("mkt_news", "MKT新闻LLM分析.py")
     ids = {
-        "flash": os.environ.get("FLASH_DIARY_PAGE_ID") or "2cf6a27aa8ba8092a693d81bcaa16977",
-        "mkt": os.environ.get("MKT_DIARY_PAGE_ID") or "2cf6a27aa8ba80c3a53ad48e584a484e",
+        "flash": (os.environ.get("FLASH_DIARY_PAGE_ID") or os.environ.get("DIARY_PARENT_PAGE_ID") or "").strip(),
+        "mkt": (os.environ.get("MKT_DIARY_PAGE_ID") or os.environ.get("DIARY_PARENT_PAGE_ID") or "").strip(),
     }
     try:
         if flash_news is None:
@@ -72,6 +72,57 @@ def run_news_aggregator():
         except Exception:
             pass
 
+
+def run_flash_only():
+    os.environ["AGGREGATOR_MODE"] = "1"
+    flash_news = load_module("flash_news", "快讯聚合LLM分析.py")
+    target_id = (os.environ.get("FLASH_DIARY_PAGE_ID") or os.environ.get("DIARY_PARENT_PAGE_ID") or "").strip()
+    try:
+        if flash_news is None:
+            raise RuntimeError("快讯模块不可用")
+        flash_news.main()
+        content = getattr(flash_news, "report", None)
+        if not content:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            content = f"{today} 快讯分析暂无可写入内容"
+        flash_news.write_to_notion(content, target_id)
+    except Exception as e:
+        print(f"快讯分析执行失败: {e}")
+        try:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            fallback = f"{today} 快讯分析暂无可写入内容"
+            if flash_news is not None:
+                flash_news.write_to_notion(fallback, target_id)
+        except Exception:
+            pass
+
+def run_mkt_only():
+    os.environ["AGGREGATOR_MODE"] = "1"
+    mkt_news = load_module("mkt_news", "MKT新闻LLM分析.py")
+    target_id = (os.environ.get("MKT_DIARY_PAGE_ID") or os.environ.get("DIARY_PARENT_PAGE_ID") or "").strip()
+    print(f"MKT目标页面ID: {target_id or '未配置'}")
+    try:
+        if mkt_news is None:
+            raise RuntimeError("MKT新闻模块不可用")
+        mkt_news.main()
+        content = getattr(mkt_news, "mkt_analysis", None)
+        if not content:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            content = f"{today} MKT新闻分析暂无可写入内容"
+        mkt_news.write_to_notion(content, target_id)
+    except Exception as e:
+        print(f"MKT新闻分析执行失败: {e}")
+        try:
+            from datetime import datetime
+            today = datetime.now().strftime("%Y-%m-%d")
+            fallback = f"{today} MKT新闻分析暂无可写入内容"
+            if mkt_news is not None:
+                mkt_news.write_to_notion(fallback, target_id)
+        except Exception:
+            pass
 
 class DailySummaryRunner:
     """
@@ -201,9 +252,14 @@ if __name__ == "__main__":
         runner.run()
     elif sign == "2":
         try:
-            run_news_aggregator()
+            run_flash_only()
         except Exception as e:
-            print(f"新闻聚合执行失败: {e}")
+            print(f"快讯聚合执行失败: {e}")
+    elif sign == "3":
+        try:
+            run_mkt_only()
+        except Exception as e:
+            print(f"MKT聚合执行失败: {e}")
     else:
         try:
             run_news_aggregator()
