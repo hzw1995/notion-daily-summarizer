@@ -37,5 +37,6 @@ jobs:
           FLASH_DIARY_PAGE_ID: ${{ secrets.FLASH_DIARY_PAGE_ID }}
           MKT_DIARY_PAGE_ID: ${{ secrets.MKT_DIARY_PAGE_ID }}
           QWEN_MODEL: ${{ secrets.QWEN_MODEL }}
+          QWEN_MKT_TRANSLATION_MODEL: ${{ secrets.QWEN_MKT_TRANSLATION_MODEL }}
           SIGN: ${{ secrets.SIGN }}
         run: python daily_summary_main.py
