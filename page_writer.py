@@ -249,14 +249,17 @@ def create_daily_summary(summary, existing_ideas_content=None, parent_page_id=No
                 t, content = _line_block_type(p)
                 _append_text_block(children_all, t, content)
             initial = children_all[:90]
-            page = notion.pages.create(
-                parent={"page_id": parent_page_id or DIARY_PARENT_PAGE_ID},
-                properties={
-                    "title": [{"text": {"content": title}}]
-                },
-                children=initial
+            created = notion.blocks.children.append(
+                block_id=parent_page_id or DIARY_PARENT_PAGE_ID,
+                children=[{
+                    "object": "block",
+                    "type": "child_page",
+                    "child_page": {"title": title}
+                }]
             )
-            page_id = page.get("id")
+            page_id = (created.get("results") or [{}])[0].get("id")
+            if initial:
+                notion.blocks.children.append(block_id=page_id, children=initial)
             i = 90
             while i < len(children_all):
                 batch = children_all[i:i+90]
