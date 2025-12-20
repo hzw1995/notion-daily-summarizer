@@ -326,7 +326,7 @@ def main():
     # 按时间倒序排列
     collected_news.sort(key=lambda x: x['time'], reverse=True)
     
-    mkt_diary_id = (os.environ.get("MKT_DIARY_PAGE_ID") or os.environ.get("DIARY_PAGE_ID") or "").strip()
+    mkt_diary_id = (os.environ.get("MKT_DIARY_PAGE_ID") or os.environ.get("DIARY_PARENT_PAGE_ID") or "").strip()
     
     print(f"\n正在使用千问生成统一分析报告 (共 {len(collected_news)} 条新闻)...")
     full_context = "【今日A股相关重要新闻汇总】\n\n"
