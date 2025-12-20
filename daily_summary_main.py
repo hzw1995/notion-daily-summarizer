@@ -91,7 +91,7 @@ class DailySummaryRunner:
         required_vars = [
             "NOTION_TOKEN",
             "IDEA_DB_ID",
-            "DIARY_PAGE_ID",
+            "DIARY_PARENT_PAGE_ID",
             "OPENAI_API_KEY"
         ]
         
@@ -134,7 +134,7 @@ class DailySummaryRunner:
             today = datetime.now().strftime("%Y-%m-%d")
             title = f"每日总结 - {today}"
             
-            existing_page = page_writer.find_page_by_title(page_writer.DIARY_PAGE_ID, title)
+            existing_page = page_writer.find_page_by_title(page_writer.DIARY_PARENT_PAGE_ID, title)
             existing_content = ""
             
             if existing_page:
