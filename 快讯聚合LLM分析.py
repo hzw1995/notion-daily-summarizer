@@ -214,7 +214,7 @@ def main():
             print(f"千问生成失败: {e}")
             report = ""
         if report:
-            target_id = (FLASH_DIARY_PAGE_ID or os.environ.get("DIARY_PAGE_ID") or "").strip()
+            target_id = (FLASH_DIARY_PAGE_ID or os.environ.get("DIARY_PARENT_PAGE_ID") or "").strip()
             if target_id and not os.environ.get("AGGREGATOR_MODE"):
                 # 自定义标题
                 title = f"快讯分析 - {datetime.now().strftime('%Y-%m-%d')}"
