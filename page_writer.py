@@ -92,7 +92,7 @@ def get_page_content(page_id):
         print(f"获取页面内容失败: {e}")
         return ""
 
-def update_page_content(page_id, summary):
+def update_page_content(page_id, summary, heading_title=None):
     """
     更新页面内容
     
@@ -101,51 +101,73 @@ def update_page_content(page_id, summary):
         summary: 新的页面内容
     """
     try:
-        # 先清空页面内容
         blocks = notion.blocks.children.list(block_id=page_id)
         for block in blocks.get("results", []):
             notion.blocks.delete(block_id=block.get("id"))
-        
-        # 生成新的页面标题
         today = datetime.now().strftime("%Y-%m-%d")
-        title = f"每日总结 - {today}"
-        
-        # 添加新内容
-        notion.blocks.children.append(
-            block_id=page_id,
-            children=[
-                {
-                    "object": "block",
-                    "type": "heading_1",
-                    "heading_1": {
-                        "rich_text": [{
-                            "type": "text",
-                            "text": {
-                                "content": title
-                            }
-                        }]
-                    }
-                },
-                {
-                    "object": "block",
-                    "type": "paragraph",
-                    "paragraph": {
-                        "rich_text": [{
-                            "type": "text",
-                            "text": {
-                                "content": summary
-                            }
-                        }]
-                    }
-                }
-            ]
-        )
+        title = heading_title or f"每日总结 - {today}"
+        def _chunks(text, limit=1800):
+            res = []
+            i = 0
+            n = len(text)
+            while i < n:
+                res.append(text[i:i+limit])
+                i += limit
+            return res
+        def _append_text_block(children, t, content):
+            for c in _chunks(content):
+                if t == "divider":
+                    children.append({"object":"block","type":"divider","divider":{}})
+                else:
+                    children.append({
+                        "object": "block",
+                        "type": t,
+                        t: {
+                            "rich_text": [{
+                                "type": "text",
+                                "text": {"content": c}
+                            }]
+                        }
+                    })
+        def _line_block_type(p):
+            if p.startswith("### "):
+                return "heading_3", p[4:]
+            if p.startswith("## "):
+                return "heading_2", p[3:]
+            if p.startswith("# "):
+                return "heading_1", p[2:]
+            if p in ("---", "———", "___"):
+                return "divider", ""
+            if p.startswith(">"):
+                return "quote", p[1:].strip()
+            import re
+            if re.match(r"^\d+\.\s+", p):
+                return "numbered_list_item", re.sub(r"^\d+\.\s+", "", p)
+            if p.startswith("- ") or p.startswith("* ") or p.startswith("• "):
+                return "bulleted_list_item", p[2:].strip()
+            return "paragraph", p
+        children_all = [{
+            "object": "block",
+            "type": "heading_1",
+            "heading_1": {"rich_text": [{"type": "text", "text": {"content": title}}]}
+        }]
+        for line in summary.split("\n"):
+            p = line.strip()
+            if not p:
+                continue
+            t, content = _line_block_type(p)
+            _append_text_block(children_all, t, content)
+        i = 0
+        while i < len(children_all):
+            batch = children_all[i:i+90]
+            notion.blocks.children.append(block_id=page_id, children=batch)
+            i += 90
         return True
     except Exception as e:
         print(f"更新页面内容失败: {e}")
         return False
 
-def create_daily_summary(summary, existing_ideas_content=None):
+def create_daily_summary(summary, existing_ideas_content=None, parent_page_id=None, title_override=None):
     """
     创建或更新每日总结页面
     
@@ -158,11 +180,11 @@ def create_daily_summary(summary, existing_ideas_content=None):
     """
     # 生成页面标题
     today = datetime.now().strftime("%Y-%m-%d")
-    title = f"每日总结 - {today}"
+    title = title_override or f"每日总结 - {today}"
     
     try:
         # 首先查找是否已存在相同标题的页面
-        existing_page = find_page_by_title(DIARY_PAGE_ID, title)
+        existing_page = find_page_by_title(parent_page_id or DIARY_PAGE_ID, title)
         
         if existing_page:
             # 页面已存在，执行更新逻辑
@@ -170,50 +192,77 @@ def create_daily_summary(summary, existing_ideas_content=None):
             page_id = existing_page.get("id")
             
             # 更新页面内容
-            update_page_content(page_id, summary)
+            update_page_content(page_id, summary, heading_title=title)
             return page_id
         else:
             # 页面不存在，创建新页面
             print(f"📝 页面不存在，正在创建新页面: {title}")
-            page = notion.pages.create(
-                parent={"page_id": DIARY_PAGE_ID},
-                properties={
-                    "title": [
-                        {
-                            "text": {
-                                "content": title
+            def _chunks(text, limit=1800):
+                res = []
+                i = 0
+                n = len(text)
+                while i < n:
+                    res.append(text[i:i+limit])
+                    i += limit
+                return res
+            def _append_text_block(children, t, content):
+                for c in _chunks(content):
+                    if t == "divider":
+                        children.append({"object":"block","type":"divider","divider":{}})
+                    else:
+                        children.append({
+                            "object": "block",
+                            "type": t,
+                            t: {
+                                "rich_text": [{
+                                    "type": "text",
+                                    "text": {"content": c}
+                                }]
                             }
-                        }
-                    ]
+                        })
+            def _line_block_type(p):
+                if p.startswith("### "):
+                    return "heading_3", p[4:]
+                if p.startswith("## "):
+                    return "heading_2", p[3:]
+                if p.startswith("# "):
+                    return "heading_1", p[2:]
+                if p in ("---", "———", "___"):
+                    return "divider", ""
+                if p.startswith(">"):
+                    return "quote", p[1:].strip()
+                import re
+                if re.match(r"^\d+\.\s+", p):
+                    return "numbered_list_item", re.sub(r"^\d+\.\s+", "", p)
+                if p.startswith("- ") or p.startswith("* ") or p.startswith("• "):
+                    return "bulleted_list_item", p[2:].strip()
+                return "paragraph", p
+            children_all = [{
+                "object": "block",
+                "type": "heading_1",
+                "heading_1": {"rich_text": [{"type": "text", "text": {"content": title}}]}
+            }]
+            for line in summary.split("\n"):
+                p = line.strip()
+                if not p:
+                    continue
+                t, content = _line_block_type(p)
+                _append_text_block(children_all, t, content)
+            initial = children_all[:90]
+            page = notion.pages.create(
+                parent={"page_id": parent_page_id or DIARY_PAGE_ID},
+                properties={
+                    "title": [{"text": {"content": title}}]
                 },
-                children=[
-                    {
-                        "object": "block",
-                        "type": "heading_1",
-                        "heading_1": {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {
-                                    "content": title
-                                }
-                            }]
-                        }
-                    },
-                    {
-                        "object": "block",
-                        "type": "paragraph",
-                        "paragraph": {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {
-                                    "content": summary
-                                }
-                            }]
-                        }
-                    }
-                ]
+                children=initial
             )
-            return page.get("id")
+            page_id = page.get("id")
+            i = 90
+            while i < len(children_all):
+                batch = children_all[i:i+90]
+                notion.blocks.children.append(block_id=page_id, children=batch)
+                i += 90
+            return page_id
     except Exception as e:
         raise Exception(f"创建/更新每日总结页面失败: {str(e)}")
 
