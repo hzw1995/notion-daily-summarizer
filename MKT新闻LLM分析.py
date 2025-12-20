@@ -25,6 +25,7 @@ import concurrent.futures
 import threading
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 mkt_analysis = None
+QWEN_MKT_TRANSLATION_MODEL = os.environ.get("QWEN_MKT_TRANSLATION_MODEL") or "qwen-plus"
 
 API_BASE = "https://api.mktnews.net"
 
@@ -151,6 +152,7 @@ def dt_from_publish(publish_time):
     
 
 def main():
+    global mkt_analysis
     category_name = None
     offset = 0
     crawl_all = False
@@ -339,7 +341,7 @@ def main():
     except Exception:
         report = None
     if report:
-        mkt_analysis = report
+        mkt_analysis = (report or "").strip()
         if mkt_diary_id and not os.environ.get("AGGREGATOR_MODE"):
             from datetime import datetime
             title = f"MKT分析 - {datetime.now().strftime('%Y-%m-%d')}"
@@ -349,12 +351,23 @@ def main():
             print("未配置Notion页面ID，已生成分析内容")
     else:
         print("千问API未返回结果，准备写入翻译汇总内容")
-        parts = []
-        for item in collected_news:
-            trans = translate_to_zh(item['body'], translator)
-            parts.append(f"【{item['title']}】\n{trans}\n{'-'*30}")
-        fallback = "\n\n".join(parts)
-        mkt_analysis = fallback
+        try:
+            import summary_generator
+            ctx = []
+            for item in collected_news:
+                ctx.append(f"【{item['title']}】\n{item['body']}\n{'-'*30}")
+            translate_input = "\n".join(ctx)
+            trans_out = summary_generator.call_qwen_api(translate_input, type="MKT_TRANS", model=QWEN_MKT_TRANSLATION_MODEL)
+            fallback = (trans_out or "").strip()
+            if not fallback:
+                raise Exception("empty translation")
+        except Exception:
+            parts = []
+            for item in collected_news:
+                trans = translate_to_zh(item['body'], translator)
+                parts.append(f"【{item['title']}】\n{trans}\n{'-'*30}")
+            fallback = "\n\n".join(parts)
+        mkt_analysis = (fallback or "").strip()
         if mkt_diary_id and not os.environ.get("AGGREGATOR_MODE"):
             from datetime import datetime
             title = f"MKT分析 - {datetime.now().strftime('%Y-%m-%d')}"
