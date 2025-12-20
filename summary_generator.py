@@ -406,7 +406,7 @@ A股市场深度理解
 """
 调用千问API生成总结
 """
-def call_qwen_api(content, type=None):
+def call_qwen_api(content, type=None, model=None):
     """
     调用千问API生成总结（优先使用DashScope SDK，其次HTTP）
     """
@@ -414,10 +414,13 @@ def call_qwen_api(content, type=None):
     try:
         from dashscope import Generation
         contentPrompt = (
-            MKT_SYSTEM_PROMPT if type == "MKT" else KX_SYSTEM_PROMPT if type == "KX" else ANALYST_SYSTEM_PROMPT
+            MKT_SYSTEM_PROMPT if type == "MKT" else KX_SYSTEM_PROMPT if type == "KX" else (
+                "将以下英文新闻逐条精准翻译为中文。仅翻译，不添加任何分析或拓展，保留段落结构，逐条输出，以【标题】起始并跟随正文。" if type == "MKT_TRANS" else ANALYST_SYSTEM_PROMPT
+            )
         )
+        m = model or QWEN_MODEL
         resp = Generation.call(
-            model=QWEN_MODEL,
+            model=m,
             messages=[
                 {"role": "system", "content": contentPrompt},
                 {"role": "user", "content": content},
@@ -443,10 +446,13 @@ def call_qwen_api(content, type=None):
         "Authorization": f"Bearer {OPENAI_API_KEY}"
     }
     contentPrompt = (
-        MKT_SYSTEM_PROMPT if type == "MKT" else KX_SYSTEM_PROMPT if type == "KX" else ANALYST_SYSTEM_PROMPT
+        MKT_SYSTEM_PROMPT if type == "MKT" else KX_SYSTEM_PROMPT if type == "KX" else (
+            "将以下英文新闻逐条精准翻译为中文。仅翻译，不添加任何分析或拓展，保留段落结构，逐条输出，以【标题】起始并跟随正文。" if type == "MKT_TRANS" else ANALYST_SYSTEM_PROMPT
+        )
     )
+    m = model or QWEN_MODEL
     payload = {
-        "model": QWEN_MODEL,
+        "model": m,
         "input": {
             "messages": [
                 {"role": "system", "content": contentPrompt},
