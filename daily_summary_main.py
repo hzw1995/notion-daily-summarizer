@@ -170,12 +170,7 @@ class DailySummaryRunner:
             ideas = idea_retriever.query_idea_database()
             
             if not ideas:
-                print("😴 过去30天没有想法记录，将仍然写入每日总结。")
-                from datetime import datetime
-                today = datetime.now().strftime("%Y-%m-%d")
-                fallback = f"今日未检索到未开始的看板项。\n日期：{today}\n提示：如需生成内容，请在看板中保留‘未开始’或‘进行中’的条目。"
-                page_id = page_writer.create_daily_summary(fallback)
-                print(f"\n🎉 每日总结生成完成！页面ID: {page_id}")
+                print("😴 过去30天没有想法记录，今日不更新每日总结。")
                 return
             
             print(f"✅ 成功获取 {len(ideas)} 个想法记录")
@@ -183,7 +178,7 @@ class DailySummaryRunner:
             # 3. 检查是否已存在今日总结页面
             from datetime import datetime
             today = datetime.now().strftime("%Y-%m-%d")
-            title = f"每日总结 - {today}"
+            title = f"股市总结 - {today}"
             
             existing_page = page_writer.find_page_by_title(page_writer.DIARY_PARENT_PAGE_ID, title)
             existing_content = ""
