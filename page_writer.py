@@ -119,14 +119,59 @@ def update_page_content(page_id, summary, heading_title=None):
                 if t == "divider":
                     children.append({"object":"block","type":"divider","divider":{}})
                 else:
+                    import re
+                    def _inline_rich_text(s):
+                        parts = []
+                        pattern = re.compile(r"(\[([^\]]+)\]\(([^)]+)\))|(\*\*([^\*]+)\*\*)|(`([^`]+)`)|(\*([^*]+)\*)|(_([^_]+)_)")
+                        pos = 0
+                        for m in pattern.finditer(s):
+                            start, end = m.span()
+                            if start > pos:
+                                parts.append({
+                                    "type": "text",
+                                    "text": {"content": s[pos:start]}
+                                })
+                            if m.group(2) and m.group(3):
+                                parts.append({
+                                    "type": "text",
+                                    "text": {"content": m.group(2), "link": {"url": m.group(3)}}
+                                })
+                            elif m.group(5):
+                                parts.append({
+                                    "type": "text",
+                                    "text": {"content": m.group(5)},
+                                    "annotations": {"bold": True}
+                                })
+                            elif m.group(7):
+                                parts.append({
+                                    "type": "text",
+                                    "text": {"content": m.group(7)},
+                                    "annotations": {"code": True}
+                                })
+                            elif m.group(9):
+                                parts.append({
+                                    "type": "text",
+                                    "text": {"content": m.group(9)},
+                                    "annotations": {"italic": True}
+                                })
+                            elif m.group(11):
+                                parts.append({
+                                    "type": "text",
+                                    "text": {"content": m.group(11)},
+                                    "annotations": {"italic": True}
+                                })
+                            pos = end
+                        if pos < len(s):
+                            parts.append({
+                                "type": "text",
+                                "text": {"content": s[pos:]}
+                            })
+                        return parts
                     children.append({
                         "object": "block",
                         "type": t,
                         t: {
-                            "rich_text": [{
-                                "type": "text",
-                                "text": {"content": c}
-                            }]
+                            "rich_text": _inline_rich_text(c)
                         }
                     })
         def _line_block_type(p):
@@ -210,14 +255,59 @@ def create_daily_summary(summary, existing_ideas_content=None, parent_page_id=No
                     if t == "divider":
                         children.append({"object":"block","type":"divider","divider":{}})
                     else:
+                        import re
+                        def _inline_rich_text(s):
+                            parts = []
+                            pattern = re.compile(r"(\[([^\]]+)\]\(([^)]+)\))|(\*\*([^\*]+)\*\*)|(`([^`]+)`)|(\*([^*]+)\*)|(_([^_]+)_)")
+                            pos = 0
+                            for m in pattern.finditer(s):
+                                start, end = m.span()
+                                if start > pos:
+                                    parts.append({
+                                        "type": "text",
+                                        "text": {"content": s[pos:start]}
+                                    })
+                                if m.group(2) and m.group(3):
+                                    parts.append({
+                                        "type": "text",
+                                        "text": {"content": m.group(2), "link": {"url": m.group(3)}}
+                                    })
+                                elif m.group(5):
+                                    parts.append({
+                                        "type": "text",
+                                        "text": {"content": m.group(5)},
+                                        "annotations": {"bold": True}
+                                    })
+                                elif m.group(7):
+                                    parts.append({
+                                        "type": "text",
+                                        "text": {"content": m.group(7)},
+                                        "annotations": {"code": True}
+                                    })
+                                elif m.group(9):
+                                    parts.append({
+                                        "type": "text",
+                                        "text": {"content": m.group(9)},
+                                        "annotations": {"italic": True}
+                                    })
+                                elif m.group(11):
+                                    parts.append({
+                                        "type": "text",
+                                        "text": {"content": m.group(11)},
+                                        "annotations": {"italic": True}
+                                    })
+                                pos = end
+                            if pos < len(s):
+                                parts.append({
+                                    "type": "text",
+                                    "text": {"content": s[pos:]}
+                                })
+                            return parts
                         children.append({
                             "object": "block",
                             "type": t,
                             t: {
-                                "rich_text": [{
-                                    "type": "text",
-                                    "text": {"content": c}
-                                }]
+                                "rich_text": _inline_rich_text(c)
                             }
                         })
             def _line_block_type(p):
