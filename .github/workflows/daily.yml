@@ -2,7 +2,7 @@ name: 📅 Daily Notion Summary
 
 on:
   schedule:
-    - cron: '0 17 * * *'  # UTC 17:00 = 北京时间次日 1:00（总结前一天）
+    - cron: '0 20 * * *'  # UTC 17:00 = 北京时间次日 1:00（总结前一天）
   workflow_dispatch:       # 支持手动触发
     inputs:
       branch:
