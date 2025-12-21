@@ -180,7 +180,7 @@ def create_daily_summary(summary, existing_ideas_content=None, parent_page_id=No
     """
     # 生成页面标题
     today = datetime.now().strftime("%Y-%m-%d")
-    title = title_override or f"每日总结 - {today}"
+    title = title_override or f"股市总结 - {today}"
     
     try:
         # 首先查找是否已存在相同标题的页面
