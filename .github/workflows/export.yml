@@ -1,0 +1,55 @@
+name: 📤 Export Notion Docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "指定日期 YYYY-MM-DD（留空为自动：今天→昨天）"
+        required: false
+      prefix:
+        description: "文件名前缀（可选）"
+        required: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install notion-client
+
+      - name: Export Today Docs
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          FLASH_DIARY_PAGE_ID: ${{ secrets.FLASH_DIARY_PAGE_ID }}
+          MKT_DIARY_PAGE_ID: ${{ secrets.MKT_DIARY_PAGE_ID }}
+          DIARY_PARENT_PAGE_ID: ${{ secrets.DIARY_PARENT_PAGE_ID }}
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            if [ -n "${{ github.event.inputs.prefix }}" ]; then
+              python export_today_docs.py -d "${{ github.event.inputs.date }}" -o exports -p "${{ github.event.inputs.prefix }}"
+            else
+              python export_today_docs.py -d "${{ github.event.inputs.date }}" -o exports
+            fi
+          else
+            if [ -n "${{ github.event.inputs.prefix }}" ]; then
+              python export_today_docs.py -o exports -p "${{ github.event.inputs.prefix }}"
+            else
+              python export_today_docs.py -o exports
+            fi
+          fi
+
+      - name: Upload Exports
+        uses: actions/upload-artifact@v4
+        with:
+          name: notion-exports-${{ github.run_id }}
+          path: exports
+          if-no-files-found: warn
