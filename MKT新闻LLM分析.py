@@ -148,8 +148,24 @@ def dt_from_publish(publish_time):
         except Exception:
             dt = datetime.now()
     return dt
-
     
+
+def _chunk_text(s, limit=6000):
+    if not s:
+        return []
+    lines = [p for p in re.split(r"\n+", s) if p]
+    chunks = []
+    cur = ""
+    for ln in lines:
+        if len(cur) + len(ln) + 1 > limit:
+            if cur:
+                chunks.append(cur)
+            cur = ln
+        else:
+            cur = (cur + "\n" + ln) if cur else ln
+    if cur:
+        chunks.append(cur)
+    return chunks
 
 def main():
     global mkt_analysis
@@ -331,19 +347,38 @@ def main():
     mkt_diary_id = (os.environ.get("MKT_DIARY_PAGE_ID") or os.environ.get("DIARY_PARENT_PAGE_ID") or "").strip()
     
     print(f"\n正在使用千问生成统一分析报告 (共 {len(collected_news)} 条新闻)...")
-    full_context = "【今日A股相关重要新闻汇总】\n\n"
+    chunks = []
+    cur = "【今日A股相关重要新闻汇总】\n\n"
     for i, item in enumerate(collected_news):
         t_str = item['time'].strftime("%Y-%m-%d %H:%M")
-        full_context += f"No.{i+1} [{t_str}] {item['title']}\n{item['body']}\n{'-'*40}\n"
+        part = f"No.{i+1} [{t_str}] {item['title']}\n{item['body']}\n{'-'*40}\n"
+        if len(cur) + len(part) > 20000:
+            chunks.append(cur)
+            cur = "【今日A股相关重要新闻汇总】\n\n" + part
+        else:
+            cur += part
+    if cur.strip():
+        chunks.append(cur)
+    api_key = (os.environ.get("OPENAI_API_KEY") or os.environ.get("DASHSCOPE_API_KEY") or "").strip()
+    if not api_key:
+        print("未找到API Key: 需设置环境变量 OPENAI_API_KEY 或 DASHSCOPE_API_KEY")
     try:
         import summary_generator
-        report = summary_generator.call_qwen_api(full_context, type="MKT")
-    except Exception:
+        reports = []
+        for ctx in chunks:
+            try:
+                out = summary_generator.call_qwen_api(ctx, type="MKT")
+                if out:
+                    reports.append((out or "").strip())
+            except Exception:
+                continue
+        report = "\n\n---\n\n".join(reports) if reports else None
+    except Exception as e:
+        print(f"千问生成失败: {e}")
         report = None
     if report:
         mkt_analysis = (report or "").strip()
         if mkt_diary_id and not os.environ.get("AGGREGATOR_MODE"):
-            from datetime import datetime
             title = f"MKT分析 - {datetime.now().strftime('%Y-%m-%d')}"
             write_to_notion_with_title(report, mkt_diary_id, title)
             print(f"已写入Notion页面: {mkt_diary_id}")
@@ -353,15 +388,28 @@ def main():
         print("千问API未返回结果，准备写入翻译汇总内容")
         try:
             import summary_generator
-            ctx = []
+            parts = []
             for item in collected_news:
-                ctx.append(f"【{item['title']}】\n{item['body']}\n{'-'*30}")
-            translate_input = "\n".join(ctx)
-            trans_out = summary_generator.call_qwen_api(translate_input, type="MKT_TRANS", model=QWEN_MKT_TRANSLATION_MODEL)
-            fallback = (trans_out or "").strip()
-            if not fallback:
-                raise Exception("empty translation")
-        except Exception:
+                chunks = _chunk_text(item['body'], limit=6000)
+                out_all = []
+                for idx, ck in enumerate(chunks or [item['body']]):
+                    single = f"【{item['title']}】\n{ck}\n{'-'*30}"
+                    try:
+                        trans_out = summary_generator.call_qwen_api(single, type="MKT_TRANS", model=QWEN_MKT_TRANSLATION_MODEL)
+                        s = (trans_out or "").strip()
+                        if not s:
+                            trans_out2 = summary_generator.call_qwen_api(single, type="MKT_TRANS", model="qwen-mt-turbo")
+                            s = (trans_out2 or "").strip()
+                        if not s:
+                            raise Exception("empty")
+                        out_all.append(s)
+                    except Exception:
+                        trans = translate_to_zh(ck, translator)
+                        out_all.append(trans)
+                parts.append(f"【{item['title']}】\n" + "\n".join(out_all) + f"\n{'-'*30}")
+            fallback = "\n\n".join(parts)
+        except Exception as e:
+            print(f"翻译生成失败，回退本地翻译: {e}")
             parts = []
             for item in collected_news:
                 trans = translate_to_zh(item['body'], translator)
@@ -369,7 +417,6 @@ def main():
             fallback = "\n\n".join(parts)
         mkt_analysis = (fallback or "").strip()
         if mkt_diary_id and not os.environ.get("AGGREGATOR_MODE"):
-            from datetime import datetime
             title = f"MKT分析 - {datetime.now().strftime('%Y-%m-%d')}"
             write_to_notion_with_title(fallback, mkt_diary_id, title)
             print(f"已写入Notion页面: {mkt_diary_id}")

@@ -454,6 +454,46 @@ def call_qwen_api(content, type=None, model=None):
     """
     调用千问API生成总结（优先使用DashScope SDK，其次HTTP）
     """
+    if not OPENAI_API_KEY:
+        raise RuntimeError("未配置千问API密钥")
+    m = model or QWEN_MODEL
+    if type == "MKT_TRANS" and ("qwen-mt" in (m or "")):
+        url_mt = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        headers_mt = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {OPENAI_API_KEY}"
+        }
+        payload_mt = {
+            "model": m,
+            "messages": [{"role": "user", "content": content}],
+            "extra_body": {
+                "translation_options": {
+                    "source_lang": "auto",
+                    "target_lang": "Chinese"
+                }
+            }
+        }
+        last_err_mt = None
+        for attempt in range(3):
+            try:
+                r = requests.post(url_mt, headers=headers_mt, data=json.dumps(payload_mt), timeout=60)
+                if r.status_code != 200:
+                    if r.status_code in (429, 500, 503) and attempt < 2:
+                        time.sleep(1 + attempt)
+                        continue
+                    raise Exception(f"API调用失败: {r.status_code}, {r.text}")
+                js = r.json()
+                choices = (js.get("choices") or [])
+                if choices:
+                    msg = choices[0].get("message") or {}
+                    return msg.get("content") or ""
+                return ""
+            except Exception as e:
+                last_err_mt = e
+                if attempt < 2:
+                    time.sleep(1 + attempt)
+                    continue
+                raise last_err_mt
     # 优先尝试 SDK
     try:
         from dashscope import Generation
@@ -462,7 +502,6 @@ def call_qwen_api(content, type=None, model=None):
                 "将以下英文新闻逐条精准翻译为中文。仅翻译，不添加任何分析或拓展，保留段落结构，逐条输出，以【标题】起始并跟随正文。" if type == "MKT_TRANS" else ANALYST_SYSTEM_PROMPT
             )
         )
-        m = model or QWEN_MODEL
         resp = Generation.call(
             model=m,
             messages=[
@@ -509,15 +548,27 @@ def call_qwen_api(content, type=None, model=None):
             "result_format": "message"
         }
     }
-    r = requests.post(url, headers=headers, data=json.dumps(payload), timeout=60)
-    if r.status_code != 200:
-        raise Exception(f"API调用失败: {r.status_code}, {r.text}")
-    js = r.json()
-    out = js.get("output", {})
-    choices = out.get("choices") or []
-    if choices:
-        return (choices[0].get("message") or {}).get("content") or choices[0].get("text") or ""
-    return out.get("text") or ""
+    last_err = None
+    for attempt in range(3):
+        try:
+            r = requests.post(url, headers=headers, data=json.dumps(payload), timeout=60)
+            if r.status_code != 200:
+                if r.status_code in (429, 500, 503) and attempt < 2:
+                    time.sleep(1 + attempt)
+                    continue
+                raise Exception(f"API调用失败: {r.status_code}, {r.text}")
+            js = r.json()
+            out = js.get("output", {})
+            choices = out.get("choices") or []
+            if choices:
+                return (choices[0].get("message") or {}).get("content") or choices[0].get("text") or ""
+            return out.get("text") or ""
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                time.sleep(1 + attempt)
+                continue
+            raise last_err
 
 
 def generate_summary(ideas, idea_retriever):
