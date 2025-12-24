@@ -1,8 +1,8 @@
 name: 📅 Daily Notion Summary
 
 on:
-  schedule:
-    - cron: '30 11 * * *'
+  ##schedule:
+  ## - cron: '30 11 * * *'
   workflow_dispatch:       # 支持手动触发
     inputs:
       branch:
