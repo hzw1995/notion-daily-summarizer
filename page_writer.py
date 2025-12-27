@@ -361,6 +361,22 @@ def create_daily_summary(summary, existing_ideas_content=None, parent_page_id=No
     except Exception as e:
         raise Exception(f"创建/更新每日总结页面失败: {str(e)}")
 
+def create_market_analysis(summary, parent_page_id=None):
+    """
+    创建或更新市场分析页面
+    
+    Args:
+        summary: 市场分析内容
+        parent_page_id: 父页面ID，默认使用配置的DIARY_PARENT_PAGE_ID
+        
+    Returns:
+        str: 页面ID
+    """
+    today = datetime.now().strftime("%Y-%m-%d")
+    title = f"市场分析 {today}"
+    return create_daily_summary(summary, parent_page_id=parent_page_id, title_override=title)
+
+
 def test_notion_connection():
     """
     测试Notion连接

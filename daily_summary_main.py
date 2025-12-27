@@ -165,9 +165,45 @@ class DailySummaryRunner:
             print("\n📊 正在测试Notion连接...")
             page_writer.test_notion_connection()
             
-            # 2. 查询想法数据库
-            print("\n📊 正在查询Notion数据库...")
-            ideas = idea_retriever.query_idea_database()
+            # 2. 查询想法来源
+            print("\n📊 正在扫描Notion来源...")
+            source_structure = idea_retriever.scan_idea_source(idea_retriever.IDEA_DB_ID)
+            db_id = source_structure.get("database_id")
+            pages = source_structure.get("pages", [])
+            
+            # 处理独立页面（市场分析）
+            if pages:
+                print(f"✅ 发现 {len(pages)} 个市场分析页面，开始处理...")
+                for page in pages:
+                    try:
+                        title = idea_retriever.get_idea_title(page)
+                        print(f"   正在分析页面: {title}")
+                        content = idea_retriever.get_idea_content(page)
+                        if not content:
+                            print("   ⚠️ 页面内容为空，跳过")
+                            continue
+                            
+                        # AI分析
+                        analysis = summary_generator.call_qwen_api(content)
+                        if analysis:
+                            pid = page_writer.create_market_analysis(analysis)
+                            print(f"   ✅ 市场分析已写入，页面ID: {pid}")
+                        else:
+                            print("   ⚠️ AI分析结果为空")
+                    except Exception as e:
+                        print(f"   ❌ 处理页面失败: {e}")
+            
+            # 处理数据库想法
+            ideas = []
+            if db_id:
+                print(f"✅ 正在查询想法数据库: {db_id}")
+                ideas = idea_retriever.query_idea_database(specific_db_id=db_id)
+            else:
+                # 尝试使用默认逻辑（兼容旧行为）
+                try:
+                    ideas = idea_retriever.query_idea_database()
+                except Exception:
+                    print("⚠️ 未发现想法数据库")
             
             if not ideas:
                 print("😴 过去30天没有想法记录，今日不更新每日总结。")
@@ -231,7 +267,9 @@ class DailySummaryRunner:
             
             print(f"\n🎉 每日总结生成完成！页面ID: {page_id}")
             print("\n✅ 正在更新看板状态为完成...")
-            updated = idea_retriever.update_ideas_status_to_done(ideas, idea_retriever.IDEA_DB_ID)
+            # 使用正确的数据库ID（如果找到了子数据库）或回退到环境变量ID
+            target_db_id = db_id or idea_retriever.IDEA_DB_ID
+            updated = idea_retriever.update_ideas_status_to_done(ideas, target_db_id)
             print(f"已更新 {updated} 条")
             
         except Exception as e:

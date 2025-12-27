@@ -56,25 +56,30 @@ def get_database_properties(database_id):
         return {}
 
 
-def query_idea_database():
+def query_idea_database(specific_db_id=None):
     """
     查询想法数据库，获取最近30天的记录
+    
+    Args:
+        specific_db_id: 可选，指定要查询的数据库ID。如果不提供，则使用IDEA_DB_ID
     """
     try:
         # 检查是否需要从页面中提取数据库ID
-        actual_db_id = IDEA_DB_ID
+        actual_db_id = specific_db_id or IDEA_DB_ID
         
-        # 先尝试直接作为数据库查询；失败时回退为页面并提取子数据库
-        try:
-            database = notion.databases.retrieve(database_id=actual_db_id)
-            if database.get("object") != "database":
+        # 如果未指定特定ID，则执行自动发现逻辑
+        if not specific_db_id:
+            # 先尝试直接作为数据库查询；失败时回退为页面并提取子数据库
+            try:
+                database = notion.databases.retrieve(database_id=actual_db_id)
+                if database.get("object") != "database":
+                    actual_db_id = get_database_id_from_page(IDEA_DB_ID)
+                    if not actual_db_id:
+                        raise ValueError(f"提供的ID {IDEA_DB_ID} 既不是有效的数据库ID，也不是包含子数据库的页面ID")
+            except Exception:
                 actual_db_id = get_database_id_from_page(IDEA_DB_ID)
                 if not actual_db_id:
-                    raise ValueError(f"提供的ID {IDEA_DB_ID} 既不是有效的数据库ID，也不是包含子数据库的页面ID")
-        except Exception:
-            actual_db_id = get_database_id_from_page(IDEA_DB_ID)
-            if not actual_db_id:
-                raise
+                    raise
         
         # 计算30天前的日期
         thirty_days_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -218,6 +223,69 @@ def get_idea_content(idea):
     except Exception as e:
         print(f"获取想法内容失败: {e}")
         return ""
+
+
+def scan_idea_source(source_id=None):
+    """
+    扫描想法来源，查找子数据库和子页面
+    
+    Args:
+        source_id: 来源ID，默认为IDEA_DB_ID
+        
+    Returns:
+        dict: {
+            "database_id": str or None,  # 找到的子数据库ID
+            "pages": list                # 找到的子页面列表(Page Objects)
+        }
+    """
+    sid = source_id or IDEA_DB_ID
+    result = {"database_id": None, "pages": []}
+    
+    if not sid:
+        return result
+        
+    try:
+        # 1. 检查是否直接是数据库
+        try:
+            obj = notion.databases.retrieve(database_id=sid)
+            if obj.get("object") == "database":
+                result["database_id"] = sid
+                return result
+        except Exception:
+            pass
+            
+        # 2. 作为页面处理，查找子项
+        # 验证是否为页面
+        try:
+            page = notion.pages.retrieve(page_id=sid)
+            if page.get("object") != "page":
+                return result
+        except Exception:
+            return result
+            
+        blocks = notion.blocks.children.list(block_id=sid)
+        
+        # 查找子数据库
+        # 优先使用现有的智能查找逻辑
+        db_id = get_database_id_from_page(sid)
+        if db_id:
+            result["database_id"] = db_id
+            
+        # 查找子页面
+        for block in blocks.get("results", []):
+            if block.get("type") == "child_page":
+                try:
+                    # 获取完整的页面对象
+                    p = notion.pages.retrieve(page_id=block.get("id"))
+                    result["pages"].append(p)
+                except Exception:
+                    continue
+                    
+        return result
+        
+    except Exception as e:
+        print(f"扫描来源失败: {e}")
+        return result
 
 
 if __name__ == "__main__":
