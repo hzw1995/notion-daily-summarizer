@@ -294,9 +294,19 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"MKT聚合执行失败: {e}")
     else:
+        print("🚀 开始执行每日总结全流程...")
+        
+        # 1. 执行新闻聚合 (快讯 + MKT)
         try:
+            print("\n=== 正在执行新闻聚合 ===")
             run_news_aggregator()
         except Exception as e:
-            print(f"新闻聚合执行失败: {e}")
-        runner = DailySummaryRunner()
-        runner.run()
+            print(f"❌ 新闻聚合执行失败: {e}")
+            
+        # 2. 执行每日总结 (想法分析 + 总结生成)
+        try:
+            print("\n=== 正在执行每日总结 ===")
+            runner = DailySummaryRunner()
+            runner.run()
+        except Exception as e:
+            print(f"❌ 每日总结执行失败: {e}")

@@ -25,18 +25,29 @@ def find_page_by_title(parent_page_id, title):
     """
     try:
         # 1. 直接查询父页面下的所有子页面（最可靠的方法）
-        response = notion.blocks.children.list(block_id=parent_page_id)
-        child_blocks = response.get("results", [])
+        has_more = True
+        next_cursor = None
         
-        for block in child_blocks:
-            if block.get("type") == "child_page":
-                child_title = block.get("child_page", {}).get("title", "")
-                if child_title == title:
-                    # 获取完整的页面信息
-                    page = notion.pages.retrieve(page_id=block.get("id"))
-                    return page
+        while has_more:
+            list_params = {"block_id": parent_page_id}
+            if next_cursor:
+                list_params["start_cursor"] = next_cursor
+                
+            response = notion.blocks.children.list(**list_params)
+            child_blocks = response.get("results", [])
+            has_more = response.get("has_more")
+            next_cursor = response.get("next_cursor")
+            
+            for block in child_blocks:
+                if block.get("type") == "child_page":
+                    child_title = block.get("child_page", {}).get("title", "")
+                    if child_title == title:
+                        # 获取完整的页面信息
+                        page = notion.pages.retrieve(page_id=block.get("id"))
+                        return page
         
         # 2. 如果直接查询子页面没有找到，尝试使用search方法
+        # 注意：search会返回所有匹配的页面，需要验证父页面ID
         pages = notion.search(
             query=title,
             filter={
@@ -51,18 +62,23 @@ def find_page_by_title(parent_page_id, title):
         )
         
         for page in pages.get("results", []):
-            properties = page.get("properties", {})
-            page_title = ""
-            
-            for prop_name in ["标题", "Title", "名称", "Name"]:
-                if prop_name in properties:
-                    prop = properties[prop_name]
-                    if prop.get("type") == "title" and prop.get("title"):
-                        page_title = "".join([t.get("text", {}).get("content", "") for t in prop.get("title", [])])
-                        break
-            
-            if page_title == title:
-                return page
+            # 验证父页面ID
+            parent = page.get("parent", {})
+            p_id = parent.get("page_id") or parent.get("database_id")
+            # 只有当父页面ID匹配时才返回（忽略破折号带来的格式差异）
+            if p_id and p_id.replace("-", "") == parent_page_id.replace("-", ""):
+                properties = page.get("properties", {})
+                page_title = ""
+                
+                for prop_name in ["标题", "Title", "名称", "Name"]:
+                    if prop_name in properties:
+                        prop = properties[prop_name]
+                        if prop.get("type") == "title" and prop.get("title"):
+                            page_title = "".join([t.get("text", {}).get("content", "") for t in prop.get("title", [])])
+                            break
+                
+                if page_title == title:
+                    return page
         
         return None
     except Exception as e:
@@ -373,7 +389,7 @@ def create_market_analysis(summary, parent_page_id=None):
         str: 页面ID
     """
     today = datetime.now().strftime("%Y-%m-%d")
-    title = f"市场分析 {today}"
+    title = f"市场分析 - {today}"
     return create_daily_summary(summary, parent_page_id=parent_page_id, title_override=title)
 
 
